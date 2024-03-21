@@ -21,6 +21,7 @@ void evs_free(struct evs *evs);
 void evs_tickgen_free(struct evs_tickgen *evs_tickgen);
 
 void evs_start(struct evs *evs);
+void evs_stop(struct evs *evs);
 void evs_add_subp(struct evs *evs, struct evs_subp *subp);
 void evs_add_func(struct evs *evs, evs_cb cb);
 void evs_add_delay(struct evs *evs, int ticks);

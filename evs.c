@@ -78,6 +78,7 @@ struct evs *evs_new(void)
     evs->cont = (char)1;
     evs->curmem = NULL;
     evs->tickgen = NULL;
+    evs->repeats = NULL;
 
     return evs;
 }
@@ -98,6 +99,8 @@ struct evs_subp *evs_subp_new(void)
 void evs_free(struct evs *evs)
 {
     evs_subp_free(evs->prog.members);
+    while (evs->ctx) evs_pop_ctx(evs);
+    while (evs->repeats) evs_pop_repeat(evs);
     free(evs);
 }
 

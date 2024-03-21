@@ -19,6 +19,11 @@ void baz(void *ctx)
     printf("%d\n", 2 * (int)ctx);
 }
 
+void stop(void *ctx)
+{
+    evs_stop(ctx);
+}
+
 int ftick(int ticks, void *ctx)
 {
     if (ticks > 0) {
@@ -75,7 +80,7 @@ void test_compose(struct evs *evs)
             (void*)4, 2,
             evs_compose_func(baz),
             evs_compose_subp(
-                "Lækre Lotte", 10,
+                "bar", 10,
                 evs_compose_func(print),
                 evs_compose_delay(100),
                 NULL
@@ -91,12 +96,17 @@ void test_compose(struct evs *evs)
         ),
         evs_compose_delay(500),
         evs_compose_subp(
-            "Mathias har en stor tissemand", 2,
+            "baz", 2,
             evs_compose_func(print),
             evs_compose_delay(5),
             NULL
         ),
         evs_compose_delay(2000),
+        evs_compose_subp(
+            evs, 0,
+            evs_compose_func(stop),
+            NULL
+        ),
         NULL
     );
 
