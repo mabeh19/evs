@@ -1,7 +1,7 @@
 
 
 typedef void (*evs_cb)(void *ctx);
-
+typedef void *evs_compose_element;
 
 struct evs;
 struct evs_subp;
@@ -9,7 +9,7 @@ struct evs_tickgen;
 
 
 struct evs_tickgen_vtable {
-    int (*waitUntilNextTick)(void *ctx);
+    int (*waitUntilNextTick)(int ticks, void *ctx);
 };
 
 
@@ -30,9 +30,15 @@ void evs_bind_tickgen(struct evs *evs, struct evs_tickgen *tickgen);
 
 void evs_subp_add_subp(struct evs_subp *evs_subp, struct evs_subp *evs_subsubp);
 void evs_subp_add_func(struct evs_subp *evs_subp, evs_cb cb);
-void evs_subp_repeat(struct evs_subp *evs_subp, int n);
 void evs_subp_add_delay(struct evs_subp *evs, int ticks);
+void evs_subp_repeat(struct evs_subp *evs_subp, int n);
 void evs_subp_ctx(struct evs_subp *evs_subp, void *ctx);
 
 void evs_tickgen_ctx(struct evs_tickgen *evs_tickgen, void *ctx);
 void evs_tickgen_vtable(struct evs_tickgen *evs_tickgen, struct evs_tickgen_vtable *vtable);
+
+// returns subp
+struct evs_subp *evs_compose(struct evs_subp *subp, ...);
+evs_compose_element evs_compose_delay(int ticks);
+evs_compose_element evs_compose_func(evs_cb cb);
+evs_compose_element evs_compose_subp(void *ctx, int repeats, ...);

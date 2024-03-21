@@ -15,5 +15,7 @@ all: $(TARGET)
 run: all
 	./$(TARGET)
 
+r: run
+
 d: all
 	gdb $(TARGET)

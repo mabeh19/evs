@@ -57,7 +57,8 @@ struct evs_tickgen {
 static void evs_update_parent(struct evs_subp_member *members, struct evs_subp_member *parent);
 static void evs_subp_free(struct evs_subp_member *members);
 static void evs_insert_member(char is_main, struct evs_subp_member **list, enum evs_mem_type type, ...);
-static struct evs_subp_member *evs_new_member(enum evs_mem_type type, va_list va);
+static struct evs_subp_member *evs_new_member(enum evs_mem_type type, ...);
+static struct evs_subp_member *evs_new_member_v(enum evs_mem_type type, va_list va);
 static int evs_progress(struct evs *evs);
 static void evs_next(struct evs *evs);
 static void evs_push_ctx(struct evs *evs, void *ctx);
@@ -111,7 +112,7 @@ void evs_start(struct evs *evs)
     int ticksToWait = 0;
 
     while (evs->cont) {
-        int ticksWaited = evs->tickgen->vtable.waitUntilNextTick(evs->tickgen->ctx);
+        int ticksWaited = evs->tickgen->vtable.waitUntilNextTick(ticksToWait, evs->tickgen->ctx);
 
         ticksToWait -= ticksWaited;
 
@@ -173,7 +174,7 @@ void evs_subp_add_delay(struct evs_subp *evs_subp, int ticks)
 
 void evs_subp_repeat(struct evs_subp *evs_subp, int n)
 {
-    evs_subp->repeats = n;
+    evs_subp->repeats = n - 1;
 }
 
 void evs_subp_ctx(struct evs_subp *evs_subp, void *ctx)
@@ -202,6 +203,50 @@ void evs_tickgen_vtable(struct evs_tickgen *evs_tickgen, struct evs_tickgen_vtab
     evs_tickgen->vtable = *vtable;
 }
 
+static void evs_compose_v(struct evs_subp_member **members, va_list elements)
+{
+    struct evs_subp_member *member;
+    while ((member = va_arg(elements, struct evs_subp_member*))) {
+        *members = member;
+        members = &(*members)->next;
+    }
+}
+
+struct evs_subp *evs_compose(struct evs_subp *subp, ...)
+{
+    va_list elements;
+
+    va_start(elements, subp);
+    evs_compose_v(&subp->prog.members, elements);
+    va_end(elements);
+
+    return subp;
+}
+
+evs_compose_element evs_compose_delay(int ticks)
+{
+    return evs_new_member(EVS_MEM_DELAY, ticks);
+}
+
+evs_compose_element evs_compose_func(evs_cb cb)
+{
+    return evs_new_member(EVS_MEM_CB, cb);
+}
+
+evs_compose_element evs_compose_subp(void *ctx, int repeats, ...)
+{
+    struct evs_subp *subp = evs_subp_new();
+    
+    va_list va;
+    evs_subp_repeat(subp, repeats); 
+    evs_subp_ctx(subp, ctx);
+    
+    va_start(va, repeats);
+    evs_compose_v(&subp->prog.members, va);
+    va_end(va);
+
+    return evs_new_member(EVS_MEM_SUBP, subp);
+}
 
 static void evs_insert_member(char is_main, struct evs_subp_member **listp, enum evs_mem_type type, ...)
 {
@@ -210,12 +255,39 @@ static void evs_insert_member(char is_main, struct evs_subp_member **listp, enum
     for (mem = listp; *mem; mem = &(*mem)->next);
     va_list va;
     va_start(va, type);
-    *mem = evs_new_member(type, va);
+    *mem = evs_new_member_v(type, va);
     (*mem)->parent = NULL;
     va_end(va);
 }
 
-static struct evs_subp_member *evs_new_member(enum evs_mem_type type, va_list va)
+static struct evs_subp_member *evs_new_member(enum evs_mem_type type, ...)
+{
+    va_list va;
+    struct evs_subp_member *mem = malloc(sizeof *mem);
+
+    mem->type = type;
+    mem->next = NULL;
+
+    va_start(va, type);
+    switch (type) {
+    case EVS_MEM_CB:
+        mem->cb = va_arg(va, evs_cb);
+        break;
+    case EVS_MEM_SUBP:
+        mem->subp = va_arg(va, struct evs_subp*);
+        evs_update_parent(mem->subp->prog.members, mem);
+        break;
+    case EVS_MEM_DELAY:
+        mem->ticks = va_arg(va, int);
+        break;
+    }
+
+    va_end(va);
+
+    return mem;
+}
+
+static struct evs_subp_member *evs_new_member_v(enum evs_mem_type type, va_list va)
 {
     struct evs_subp_member *mem = malloc(sizeof *mem);
 
@@ -280,8 +352,13 @@ static void evs_next(struct evs *evs)
         evs->repeats->n--;
     }
     else {
+        for (; !parent->next && parent->parent; parent = parent->parent) {
+            evs_pop_ctx(evs);
+            evs_pop_repeat(evs);
+        }
         evs->curmem = parent->next;
         evs_pop_ctx(evs);
+        evs_pop_repeat(evs);
     }
 }
 
